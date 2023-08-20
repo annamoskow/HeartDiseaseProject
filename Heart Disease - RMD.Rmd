@@ -1,0 +1,348 @@
+---
+title: "Heart Disease Project"
+author: "Anna M"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+The Heart Disease Dataset from Kaggle will be used for exploratory data 
+analysis (EDA). As this data set is already cleaned, EDA will focus on investigating 
+and visualizing the attributes of this data set. This project will investigate 
+whether there is a correlation between heart disease and other parameters in 
+this data set.
+
+```{r, include = FALSE}
+##Packages downloaded (left in comments as CRAN specs are different for knitr)
+##install.packages("corrplot")
+##install.packages("ggplot2")
+##install.packages("dplyr")
+```
+
+
+```{r load-packages, include = FALSE}
+##Packages loaded
+library(corrplot)
+library(ggplot2)
+library(dplyr)
+```
+
+Dataset downloaded
+
+```{r}
+heart <- read.csv("heart.csv")
+```
+
+Brief overview of correlation of variables 
+
+```{r}
+corrplot(cor(heart), type="upper")
+```
+
+Identify variables in dataset
+
+```{r}
+ls()
+ls(heart)
+```
+
+Categorical variables changed from numeric values to string values
+
+```{r}
+heart$sex[heart$sex == 0] = "female"
+heart$sex[heart$sex == 1] = "male"
+heart$cp[heart$cp == 0] = "typical angina"
+heart$cp[heart$cp == 1] = "atypical angina"
+heart$cp[heart$cp == 2] = "non-anginal pain"
+heart$cp[heart$cp == 3] = "asymptomatic"
+##trestbps does not need to be changed as it shows resting blood pressure (unique)
+##chol does not need to be changed as it shows cholesterol level (unique)
+heart$fbs[heart$fbs == 0] = "blood sugar = or < 120mg/dl"
+heart$fbs[heart$fbs == 1] = "blood sugar > 120mg/dl"
+heart$restecg[heart$restecg == 0] = "normal ECG"
+heart$restecg[heart$restecg == 1] = "ST-T wave abnormality"
+heart$restecg[heart$restecg == 2] = "left ventricular hypertrophy"
+##thalach does not need to be changed as it shows maximum heart rate (unique)
+heart$exang[heart$exang == 0] = "no"
+heart$exang[heart$exang == 1] = "yes"
+##oldpeak does not need to be changed as it shows ST depression (unique)
+heart$slope[heart$slope == 0] = "upsloping"
+heart$slope[heart$slope == 1] = "flat"
+heart$slope[heart$slope == 2] = "downsloping"
+##ca does not need to be changed as it shows number of major vessels (numeric)
+heart$thal[heart$thal == 1] = "normal"
+heart$thal[heart$thal == 2] = "fixed defect"
+heart$thal[heart$thal == 3] = "reversable defect"
+```
+
+We will use "target1" to keep have both the numeric value of target and the
+categorical value of target1.
+
+```{r}
+heart$target1[heart$target == 0] = "no"
+heart$target1[heart$target == 1] = "yes"
+```
+
+Q: What is proportion of sample population with heart disease?
+
+```{r}
+##Proportion table
+prop.table(table(heart$target1))
+
+##Proportion table with result rounded to two decimal places
+round(prop.table(table(heart$target1)), 2)
+```
+
+Q: What subpopulation is heart disease most prevalent in? 
+
+```{r}
+##Distribution of sample
+ggplot(heart, aes(x=age)) + 
+  geom_histogram() + 
+  ggtitle("Distribution of age of the population") + 
+  xlab("Age") + 
+  ylab("Density")
+```
+
+The distribution is almost normal, but also slightly skewed to the right. 
+Looking at age groups may be helpful, as the primary age group of the sample is 50-65.
+
+```{r}
+##Min and max age ranges
+min(heart$age)
+max(heart$age)
+```
+
+We will look at the range of ages from 29-77. Now we separate age groups into 
+4-year sections.
+
+```{r}
+##The cut function was not including lowest group (29-33) and instead putting
+##putting this value at the end of the list with NA, but this was fixed by adding
+#the last argument.
+heart$age_group = cut(heart$age, breaks = seq(29,77,4), include.lowest = TRUE)
+```
+
+Now, we can find the number of people with heart disease for each age group.
+
+```{r}
+##NB: we are using target here (numeric), not target1 (character) because 
+##summarise cannot take character vectors. 
+
+HD_by_age = heart %>%
+  group_by(age_group) %>%
+  summarise(heart_disease = sum(target))
+
+HD_by_age
+```
+
+We can visualise this with a barplot.
+
+```{r}
+HD_by_age %>%
+  ggplot(aes(x = age_group, y = heart_disease)) + 
+  geom_bar(stat = "identity", fill = "red", alpha = .5, width = .4) + 
+  xlab("Age Groups") + 
+  ylab("# People with HD") + 
+  ggtitle("# HD by Age Group") + 
+  theme_bw()
+```
+
+This is a good visualisation, but does not show the relative rate of HD.
+We need to find the proportion of people with HD by age group, as our sample
+does not include as many people with ages below 30 or above 70. 
+
+```{r}
+prop_in_age <- heart %>%
+  group_by(age_group) %>%
+  summarise(HD_prop = round(sum(target)/n(), 3)*100)
+
+prop_in_age
+```
+
+We can visualise this with a barplot.
+
+```{r}
+prop_in_age %>%
+  ggplot(aes(x = age_group, y = HD_prop)) + 
+  geom_bar(stat = "identity", fill = "blue", alpha = .5, width = .4) + 
+  xlab("Age Groups") + 
+  ylab("Prop People with HD") + 
+  ggtitle("Prop HD by Age Group") + 
+  theme_bw()
+```
+
+100% of people 29-33 have HD. This is not representative of real life, so this
+dataset is not a representative sample. Thus, we cannot infer anything about 
+how age contributes to HD from this dataset.
+
+#### Exploring Variable Relationships: Sex</font> 
+
+Q: What is proportion of sample population with HD by sex?
+
+```{r}
+prop.table(table(heart$sex))
+round(prop.table(table(heart$sex)), 2)
+```
+
+Q: What is the proportion of males vs females with HD?
+
+```{r}
+round(prop.table(table(heart$sex, heart$target1)), 2)
+```
+
+We find that the female proportion of HD is much higher than male. This 
+could be due to females having a lower sample overall, indicating a slight
+bias towards a sample of more women who have HD. 
+
+#### Exploring Variable Relationships: Slope of Peak Exercise</font> 
+
+First, I need to understand what this variable represents. 
+
+An ST slope shifts relative to exercise-induced increments in HR. 
+Importance: The ST/HR slope has been proposed as a more accurate ECG 
+criterion for diagnosing significant coronary artery disease. 
+
+* Upwards slope = normal ST during exercise
+* Flat/downwards slope = may indicate coronary ischemia
+
+To see this represented in our sample data, we will look at how ST slope
+relates to HR incidence. Since we are using yes/no, target1 (categorical) 
+was used. To get the barplot side by side instead of stacked, dodge was used.
+
+* slope = 0 is upwards
+* slope = 1 is flat
+* slope = 2 is downwards 
+
+```{r}
+ggplot(heart, aes(x = slope, fill = target1)) + 
+  geom_bar(position = "dodge") + 
+  xlab("Slope") + 
+  ylab("Count") + 
+  ggtitle("HD Incidence by ST Slope") + 
+  scale_fill_discrete(name = "Heart disease", labels = c("No", "Yes"))
+```
+
+From this, we see that those with downsloping ST slopes are most likely to 
+have higher changes of HD compared with flat or upwards slope. 
+
+Now, let's look at the above proportions by sex.
+
+```{r}
+male_data = heart[heart$sex=="male",]
+female_data = heart[heart$sex=="female",]
+
+##The comma at the end (row, column) means that we are looking at rows 
+##have "male" in all the entire column (hence it is left blank)
+```
+
+Let's visualise this with a barplot (MALES).
+
+```{r}
+ggplot(male_data, aes(x = slope, fill = target1)) + 
+  geom_bar(position = "dodge") + 
+  xlab("Slope") + 
+  ylab("Count") + 
+  ggtitle("HD Incidence of ST Slope - Males") + 
+  scale_fill_discrete(name = "HD", labels = c("No", "Yes"))
+```
+
+Let's visualise this with a barplot (FEMALES). 
+
+```{r}
+ggplot(female_data, aes(x = slope, fill = target1)) + 
+  geom_bar(position = "dodge") + 
+  xlab("Slope") + 
+  ylab("Count") + 
+  ggtitle("HD Incidence of ST Slope - Females") + 
+  scale_fill_discrete(name = "HD", labels = c("No", "Yes"))
+```
+
+From this, we see that the proportion of women who have downsloping ST is much 
+higher than the males proportion for this group. Additionally, compared to the 
+original graph (not grouped by sex), the male trend follows this original graph 
+whereas the female population is very different. As the female population is 
+much less, it shifts the overall data pattern less, so it makes sense the overall
+data reflects the male pattern of HD incidence by type more. 
+
+#### Exploring Variable Relationships: Number of Major Vessels</font> 
+
+We can use a mosaic plot to visualise the differences in HD by number of 
+major vessels. 
+
+```{r}
+mosaicplot(table(heart$target1, heart$ca), col = c("red", "yellow", "blue", "black", "pink"), 
+           main = "HD for Major Vessels")
+```
+
+We see that almost double the amount of people who have no major vessel
+have heart disease. In general, very few people have 4 major vessels. 
+
+We can visualise this by sex.
+
+```{r}
+mosaicplot(table(male_data$target1, male_data$ca), col = c("red", "yellow", "blue", "black", "pink"), 
+           main = "HD for Major Vessels - Male")
+
+mosaicplot(table(female_data$target1, female_data$ca), col = c("red", "yellow", "blue", "black", "pink"), 
+           main = "HD for Major Vessels - Female")
+```
+
+We find that both male and female subpopulations reflect the overall data.
+
+#### Exploring Variable Relationships: ST Depression by Exercise</font> 
+
+First, we will look at the distribution of ST depression by HD incidence. 
+
+```{r}
+ggplot(heart, aes(x = target1, y = oldpeak)) + 
+  geom_boxplot()
+```
+
+We see that ST depression for HD incidence is higher (eg IGQ) than that
+for no HR incidence
+
+Q: Does this depression change by age? Does this have an impact on HD? 
+
+```{r}
+ggplot(heart, aes(x = age, y = oldpeak, color = target1)) + 
+  geom_point(alpha = 0.3) + 
+  labs(color = "Heart Disease State") + 
+  xlab("Age") + 
+  ylab("ST Depression") + 
+  ggtitle("Age vs Resting Blood Pressure Separated by Heart Condition") +
+  guides(size = FALSE)
+```
+
+We see that there is no clear relationship ebtween age and ST depresison. 
+
+#### Exploring Variable Relationships: Resting Blood Pressure</font> 
+
+```{r}
+ggplot(heart, aes(x = target1, y = trestbps)) + 
+  geom_boxplot() + 
+  xlab("Heart Disease State") + 
+  ylab("Resting BP") + 
+  ggtitle("Boxplots of Resting BP by Heart Condition")
+```
+
+Medians of these boxplots are similar. We can interrogate this relationship
+further by looking at ST Depression.
+
+```{r}
+ggplot(heart, aes(x = age, y = trestbps, color = target1, size = factor(oldpeak))) + 
+  geom_point(alpha = 0.3) + 
+  xlab("Heart Disease State") + 
+  ylab("Resting BP") + 
+  ggtitle("Boxplots of Resting BP by Heart Condition") + 
+  guides(size = FALSE)
+```
+
+From this, we see that resting blood pressure is low (< 100), heart disease
+cases are higher than no heart disease cases. Additionally, most dots are red
+meaning that more people with ST depression have no heart disease. And, 
+more large dots are in the higher age range so ST Depression is higher in 
+older populations. 
